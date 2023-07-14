@@ -5,7 +5,10 @@ use mlir_sys::{
     mlirRewritePatternSetGet, MlirPDLPatternModule, MlirRewritePatternSet,
 };
 
-use crate::{ir::Module, Context};
+use crate::{
+    ir::{Module, Region},
+    Context,
+};
 
 #[derive(Debug)]
 pub struct RewritePatternSet<'c> {

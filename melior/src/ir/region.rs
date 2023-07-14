@@ -1,4 +1,4 @@
-use super::{Block, BlockRef};
+use super::{block::BlockIter, Block, BlockRef};
 use crate::{logical_result::LogicalResult, pdl::RewritePatternSet};
 use mlir_sys::{
     mlirApplyOwnedPatternsGreedilyOnRegion, mlirRegionAppendOwnedBlock, mlirRegionCreate,
@@ -89,6 +89,10 @@ impl<'c> Region<'c> {
         forget(self);
 
         region
+    }
+
+    pub fn iter(&'c self) -> BlockIter<'c, '_> {
+        BlockIter::new(self.first_block())
     }
 }
 

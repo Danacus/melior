@@ -29,6 +29,12 @@ impl<'c> OperationBuilder<'c> {
         }
     }
 
+    /// Adds a single result.
+    pub fn add_result(mut self, result: Type<'c>) -> Self {
+        unsafe { mlirOperationStateAddResults(&mut self.raw, 1, &result as *const _ as *const _) }
+        self
+    }
+
     /// Adds results.
     pub fn add_results(mut self, results: &[Type<'c>]) -> Self {
         unsafe {
@@ -38,6 +44,13 @@ impl<'c> OperationBuilder<'c> {
                 results as *const _ as *const _,
             )
         }
+
+        self
+    }
+
+    /// Adds a single operand.
+    pub fn add_operand(mut self, operand: Value<'c, '_>) -> Self {
+        unsafe { mlirOperationStateAddOperands(&mut self.raw, 1, &operand as *const _ as *const _) }
 
         self
     }
@@ -55,6 +68,15 @@ impl<'c> OperationBuilder<'c> {
         self
     }
 
+    /// Adds a single region.
+    pub fn add_region(mut self, region: Region<'c>) -> Self {
+        unsafe {
+            mlirOperationStateAddOwnedRegions(&mut self.raw, 1, &region as *const _ as *const _)
+        }
+
+        self
+    }
+
     /// Adds regions.
     pub fn add_regions(mut self, regions: Vec<Region<'c>>) -> Self {
         unsafe {
@@ -63,6 +85,15 @@ impl<'c> OperationBuilder<'c> {
                 regions.len() as isize,
                 regions.leak().as_ptr() as *const _ as *const _,
             )
+        }
+
+        self
+    }
+
+    /// Adds a single successor block.
+    pub fn add_successor(mut self, successor: &Block<'c>) -> Self {
+        unsafe {
+            mlirOperationStateAddSuccessors(&mut self.raw, 1, successor.to_raw().ptr as *const _)
         }
 
         self
@@ -82,6 +113,23 @@ impl<'c> OperationBuilder<'c> {
                     .map(|block| block.to_raw())
                     .collect::<Vec<_>>()
                     .as_ptr() as *const _,
+            )
+        }
+
+        self
+    }
+
+    /// Adds a single attribute.
+    pub fn add_attribute(
+        mut self,
+        name: &Identifier<'c>,
+        attribute: &impl AttributeLike<'c>,
+    ) -> Self {
+        unsafe {
+            mlirOperationStateAddAttributes(
+                &mut self.raw,
+                1,
+                &mlirNamedAttributeGet(name.to_raw(), attribute.to_raw()) as *const _,
             )
         }
 

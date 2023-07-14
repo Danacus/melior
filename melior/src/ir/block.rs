@@ -3,7 +3,9 @@
 mod argument;
 
 pub use self::argument::BlockArgument;
-use super::{Location, Operation, OperationRef, RegionRef, Type, TypeLike, Value};
+use super::{
+    operation::OperationIter, Location, Operation, OperationRef, RegionRef, Type, TypeLike, Value,
+};
 use crate::{context::Context, utility::print_callback, Error};
 use mlir_sys::{
     mlirBlockAddArgument, mlirBlockAppendOwnedOperation, mlirBlockCreate, mlirBlockDestroy,
@@ -216,6 +218,43 @@ impl<'c> Block<'c> {
     /// Converts a block into a raw object.
     pub const fn to_raw(&self) -> MlirBlock {
         self.raw
+    }
+
+    pub fn iter(&'c self) -> OperationIter<'c, '_> {
+        OperationIter::new(self.first_operation())
+    }
+}
+
+pub struct BlockIter<'c, 'a> {
+    current: Option<MlirBlock>,
+    _reference: PhantomData<&'a Block<'c>>,
+}
+
+impl<'c, 'a> BlockIter<'c, 'a> {
+    pub(crate) fn new(operation: Option<BlockRef<'c, 'a>>) -> Self {
+        Self {
+            current: operation.map(|o| o.to_raw()),
+            _reference: Default::default(),
+        }
+    }
+}
+
+impl<'c, 'a> Iterator for BlockIter<'c, 'a> {
+    type Item = BlockRef<'c, 'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.current;
+        if let Some(curr) = current {
+            let next = unsafe { mlir_sys::mlirBlockGetNextInRegion(curr) };
+            if !next.ptr.is_null() {
+                self.current = Some(next);
+            } else {
+                self.current = None;
+            }
+            unsafe { Some(BlockRef::from_raw(curr)) }
+        } else {
+            return None;
+        }
     }
 }
 

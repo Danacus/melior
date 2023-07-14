@@ -7,13 +7,13 @@ mod result;
 pub use self::{
     builder::OperationBuilder, printing_flags::OperationPrintingFlags, result::OperationResult,
 };
-use super::{BlockRef, Identifier, RegionRef};
+use super::{Attribute, AttributeLike, BlockRef, Identifier, RegionRef, Value};
 use crate::{
     context::{Context, ContextRef},
     logical_result::LogicalResult,
     pdl::RewritePatternSet,
     utility::{print_callback, print_string_callback},
-    Error,
+    Error, StringRef,
 };
 use core::{
     fmt,
@@ -21,10 +21,12 @@ use core::{
 };
 use mlir_sys::{
     mlirApplyOwnedPatternsGreedilyOnOperation, mlirOperationClone, mlirOperationDestroy,
-    mlirOperationDump, mlirOperationEqual, mlirOperationGetBlock, mlirOperationGetContext,
-    mlirOperationGetName, mlirOperationGetNextInBlock, mlirOperationGetNumRegions,
-    mlirOperationGetNumResults, mlirOperationGetRegion, mlirOperationGetResult, mlirOperationPrint,
-    mlirOperationPrintWithFlags, mlirOperationVerify, MlirOperation,
+    mlirOperationDump, mlirOperationEqual, mlirOperationGetAttributeByName, mlirOperationGetBlock,
+    mlirOperationGetContext, mlirOperationGetName, mlirOperationGetNextInBlock,
+    mlirOperationGetNumOperands, mlirOperationGetNumRegions, mlirOperationGetNumResults,
+    mlirOperationGetOperand, mlirOperationGetRegion, mlirOperationGetResult, mlirOperationPrint,
+    mlirOperationPrintWithFlags, mlirOperationRemoveAttributeByName,
+    mlirOperationSetAttributeByName, mlirOperationVerify, MlirOperation,
 };
 use std::{
     ffi::c_void,
@@ -32,6 +34,8 @@ use std::{
     marker::PhantomData,
     ops::{Deref, DerefMut},
 };
+
+pub type OperationOperand<'c, 'a> = Value<'c, 'a>;
 
 /// An operation.
 pub struct Operation<'c> {
@@ -84,6 +88,61 @@ impl<'c> Operation<'c> {
         }
     }
 
+    pub fn results_range(
+        &self,
+        range: std::ops::Range<usize>,
+    ) -> Result<Vec<OperationResult<'c, '_>>, Error> {
+        let mut results = Vec::new();
+
+        for i in range {
+            results.push(self.result(i)?);
+        }
+
+        Ok(results)
+    }
+
+    pub fn results(&self) -> Result<Vec<OperationResult<'c, '_>>, Error> {
+        self.results_range(0..self.result_count())
+    }
+
+    pub fn operand_count(&self) -> usize {
+        unsafe { mlirOperationGetNumOperands(self.raw) as usize }
+    }
+
+    pub fn operand(&self, index: usize) -> Result<OperationOperand<'c, '_>, Error> {
+        unsafe {
+            if index < self.operand_count() {
+                Ok(OperationOperand::from_raw(mlirOperationGetOperand(
+                    self.raw,
+                    index as isize,
+                )))
+            } else {
+                Err(Error::PositionOutOfBounds {
+                    name: "operation operand",
+                    value: self.to_string(),
+                    index,
+                })
+            }
+        }
+    }
+
+    pub fn operands_range(
+        &self,
+        range: std::ops::Range<usize>,
+    ) -> Result<Vec<OperationOperand<'c, '_>>, Error> {
+        let mut operands = Vec::new();
+
+        for i in range {
+            operands.push(self.operand(i)?);
+        }
+
+        Ok(operands)
+    }
+
+    pub fn operands(&self) -> Result<Vec<OperationOperand<'c, '_>>, Error> {
+        self.operands_range(0..self.operand_count())
+    }
+
     /// Gets a number of results.
     pub fn result_count(&self) -> usize {
         unsafe { mlirOperationGetNumResults(self.raw) as usize }
@@ -110,6 +169,43 @@ impl<'c> Operation<'c> {
     /// Gets a number of regions.
     pub fn region_count(&self) -> usize {
         unsafe { mlirOperationGetNumRegions(self.raw) as usize }
+    }
+
+    pub fn attribute(&self, name: impl AsRef<str>) -> Option<Attribute<'c>> {
+        unsafe {
+            Attribute::from_option_raw(mlirOperationGetAttributeByName(
+                self.raw,
+                StringRef::from(name.as_ref()).to_raw(),
+            ))
+        }
+    }
+
+    pub fn has_attribute(&self, name: impl AsRef<str>) -> bool {
+        self.attribute(name).is_some()
+    }
+
+    pub fn set_attribute(&self, name: impl AsRef<str>, attribute: impl AttributeLike<'c>) {
+        unsafe {
+            mlirOperationSetAttributeByName(
+                self.raw,
+                StringRef::from(name.as_ref()).to_raw(),
+                attribute.to_raw(),
+            )
+        }
+    }
+
+    pub fn remove_attribute(&self, name: impl AsRef<str>) -> Result<(), Error> {
+        unsafe {
+            let result = mlirOperationRemoveAttributeByName(
+                self.raw,
+                StringRef::from(name.as_ref()).to_raw(),
+            );
+            if result {
+                Ok(())
+            } else {
+                Err(Error::OperationAttributeExpected(name.as_ref().into()))
+            }
+        }
     }
 
     /// Gets the next operation in the same block.
@@ -216,6 +312,39 @@ impl<'c> Debug for Operation<'c> {
         writeln!(formatter, "Operation(")?;
         Display::fmt(self, formatter)?;
         write!(formatter, ")")
+    }
+}
+
+pub struct OperationIter<'c, 'a> {
+    current: Option<MlirOperation>,
+    _reference: PhantomData<&'a Operation<'c>>,
+}
+
+impl<'c, 'a> OperationIter<'c, 'a> {
+    pub(crate) fn new(operation: Option<OperationRef<'c, 'a>>) -> Self {
+        Self {
+            current: operation.map(|o| o.to_raw()),
+            _reference: Default::default(),
+        }
+    }
+}
+
+impl<'c, 'a> Iterator for OperationIter<'c, 'a> {
+    type Item = OperationRef<'c, 'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let current = self.current;
+        if let Some(curr) = current {
+            let next = unsafe { mlir_sys::mlirOperationGetNextInBlock(curr) };
+            if !next.ptr.is_null() {
+                self.current = Some(next);
+            } else {
+                self.current = None;
+            }
+            unsafe { Some(OperationRef::from_raw(curr)) }
+        } else {
+            return None;
+        }
     }
 }
 
