@@ -10,6 +10,8 @@ pub use self::{
 use super::{BlockRef, Identifier, RegionRef};
 use crate::{
     context::{Context, ContextRef},
+    logical_result::LogicalResult,
+    pdl::RewritePatternSet,
     utility::{print_callback, print_string_callback},
     Error,
 };
@@ -22,13 +24,14 @@ use mlir_sys::{
     mlirOperationGetBlock, mlirOperationGetContext, mlirOperationGetName,
     mlirOperationGetNextInBlock, mlirOperationGetNumRegions, mlirOperationGetNumResults,
     mlirOperationGetRegion, mlirOperationGetResult, mlirOperationPrint,
-    mlirOperationPrintWithFlags, mlirOperationVerify, MlirOperation,
+    mlirOperationPrintWithFlags, mlirOperationVerify, mlirRustApplyOwnedPatternSetOnOperation,
+    MlirOperation,
 };
 use std::{
     ffi::c_void,
     fmt::{Debug, Display, Formatter},
     marker::PhantomData,
-    ops::Deref,
+    ops::{Deref, DerefMut},
 };
 
 /// An operation.
@@ -41,6 +44,15 @@ impl<'c> Operation<'c> {
     /// Gets a context.
     pub fn context(&self) -> ContextRef<'c> {
         unsafe { ContextRef::from_raw(mlirOperationGetContext(self.raw)) }
+    }
+
+    pub fn apply_pattern_set(&mut self, pattern_set: RewritePatternSet) -> LogicalResult {
+        unsafe {
+            LogicalResult::from_raw(mlirRustApplyOwnedPatternSetOnOperation(
+                self.raw,
+                pattern_set.to_raw(),
+            ))
+        }
     }
 
     /// Gets a name.
@@ -291,6 +303,100 @@ impl<'c, 'a> Display for OperationRef<'c, 'a> {
 }
 
 impl<'c, 'a> Debug for OperationRef<'c, 'a> {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        Debug::fmt(self.deref(), formatter)
+    }
+}
+
+/// A reference to an operation.
+#[derive(Clone, Copy)]
+pub struct OperationMut<'c, 'a> {
+    raw: MlirOperation,
+    _reference: PhantomData<&'a mut Operation<'c>>,
+}
+
+impl<'c, 'a> OperationMut<'c, 'a> {
+    /// Gets a result at a position.
+    pub fn result(self, index: usize) -> Result<OperationResult<'c, 'a>, Error> {
+        unsafe { self.to_ref() }.result(index)
+    }
+
+    /// Gets an operation.
+    ///
+    /// This function is different from `deref` because the correct lifetime is
+    /// kept for the return type.
+    ///
+    /// # Safety
+    ///
+    /// The returned reference is safe to use only in the lifetime scope of the
+    /// operation reference.
+    pub unsafe fn to_ref(&self) -> &'a Operation<'c> {
+        // As we can't deref OperationMut<'a> into `&'a Operation`, we forcibly cast its
+        // lifetime here to extend it from the lifetime of `ObjectRef<'a>` itself into
+        // `'a`.
+        transmute(self)
+    }
+
+    /// Converts an operation reference into a raw object.
+    pub const fn to_raw(self) -> MlirOperation {
+        self.raw
+    }
+
+    /// Creates an operation reference from a raw object.
+    ///
+    /// # Safety
+    ///
+    /// A raw object must be valid.
+    pub unsafe fn from_raw(raw: MlirOperation) -> Self {
+        Self {
+            raw,
+            _reference: Default::default(),
+        }
+    }
+
+    /// Creates an optional operation reference from a raw object.
+    ///
+    /// # Safety
+    ///
+    /// A raw object must be valid.
+    pub unsafe fn from_option_raw(raw: MlirOperation) -> Option<Self> {
+        if raw.ptr.is_null() {
+            None
+        } else {
+            Some(Self::from_raw(raw))
+        }
+    }
+}
+
+impl<'c, 'a> Deref for OperationMut<'c, 'a> {
+    type Target = Operation<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { transmute(self) }
+    }
+}
+
+impl<'c, 'a> DerefMut for OperationMut<'c, 'a> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        unsafe { transmute(self) }
+    }
+}
+
+impl<'c, 'a> PartialEq for OperationMut<'c, 'a> {
+    fn eq(&self, other: &Self) -> bool {
+        unsafe { mlirOperationEqual(self.raw, other.raw) }
+    }
+}
+
+impl<'c, 'a> Eq for OperationMut<'c, 'a> {}
+
+impl<'c, 'a> Display for OperationMut<'c, 'a> {
+    fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
+        Display::fmt(self.deref(), formatter)
+    }
+}
+
+impl<'c, 'a> Debug for OperationMut<'c, 'a> {
     fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
         Debug::fmt(self.deref(), formatter)
     }
