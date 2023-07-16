@@ -1,7 +1,7 @@
 use super::Pass;
 use crate::{
     dialect::DialectHandle,
-    ir::{r#type::TypeId, OperationRef},
+    ir::{operation::OperationMut, r#type::TypeId, OperationRef},
     ContextRef, StringRef,
 };
 use mlir_sys::{MlirContext, MlirExternalPass, MlirLogicalResult, MlirOperation};
@@ -36,7 +36,7 @@ unsafe extern "C" fn callback_run<'a, T: ExternalPass<'a>>(
 ) {
     pass.as_mut()
         .expect("pass should be valid when called")
-        .run(OperationRef::from_raw(op))
+        .run(OperationMut::from_raw(op))
 }
 
 unsafe extern "C" fn callback_clone<'a, T: ExternalPass<'a>>(pass: *mut T) -> *mut T {
@@ -51,13 +51,13 @@ pub trait ExternalPass<'c>: Sized + Clone {
     fn construct(&mut self) {}
     fn destruct(&mut self) {}
     fn initialize(&mut self, context: ContextRef<'c>);
-    fn run(&mut self, operation: OperationRef<'c, '_>);
+    fn run(&mut self, operation: OperationMut<'c, '_>);
 }
 
-impl<'c, F: Fn(OperationRef<'c, '_>) + Clone> ExternalPass<'c> for F {
+impl<'c, F: Fn(OperationMut<'c, '_>) + Clone> ExternalPass<'c> for F {
     fn initialize(&mut self, _context: ContextRef<'c>) {}
 
-    fn run(&mut self, operation: OperationRef<'c, '_>) {
+    fn run(&mut self, operation: OperationMut<'c, '_>) {
         self(operation)
     }
 }

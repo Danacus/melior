@@ -10,6 +10,7 @@ mod execution_engine;
 pub mod ir;
 mod logical_result;
 pub mod pass;
+pub mod pdl;
 mod string_ref;
 #[cfg(test)]
 mod test;

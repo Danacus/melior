@@ -13,7 +13,8 @@ keywords = ["mlir", "llvm"]
 criterion = "0.5.1"
 dashmap = "5.5.0"
 melior-macro = { version = "0.4", path = "../macro" }
-mlir-sys = "0.2"
+# mlir-sys = "0.2"
+mlir-sys = { path = "../../mlir-sys" }
 once_cell = "1"
 
 [dev-dependencies]
