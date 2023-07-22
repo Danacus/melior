@@ -22,4 +22,5 @@ syn = { version = "2", features = ["full"] }
 
 [dev-dependencies]
 melior = { path = "../melior" }
-mlir-sys = "0.2"
+# mlir-sys = "0.2"
+mlir-sys = { path = "../../mlir-sys" }
