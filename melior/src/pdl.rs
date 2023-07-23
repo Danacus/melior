@@ -1,8 +1,8 @@
 use std::marker::PhantomData;
 
 use mlir_sys::{
-    mlirModuleDestroy, mlirRustPDLPatternGet, mlirRustPatternSetAddOwnedPDLPattern,
-    mlirRustRewritePatternSetGet, MlirPDLPatternModule, MlirRewritePatternSet,
+    mlirModuleDestroy, mlirPDLPatternGet, mlirPatternSetAddOwnedPDLPattern,
+    mlirRewritePatternSetGet, MlirPDLPatternModule, MlirRewritePatternSet,
 };
 
 use crate::{ir::Module, Context};
@@ -15,13 +15,13 @@ pub struct RewritePatternSet<'c> {
 
 impl<'c> RewritePatternSet<'c> {
     pub fn new(context: &'c Context) -> Self {
-        unsafe { Self::from_raw(mlirRustRewritePatternSetGet(context.to_raw())) }
+        unsafe { Self::from_raw(mlirRewritePatternSetGet(context.to_raw())) }
     }
 
     /// Adds a PDL pattern to the set.
     pub fn add_pdl_pattern(&mut self, pattern: PDLPatternModule<'c>) {
         unsafe {
-            mlirRustPatternSetAddOwnedPDLPattern(self.raw, pattern.to_raw());
+            mlirPatternSetAddOwnedPDLPattern(self.raw, pattern.to_raw());
         }
     }
 
@@ -51,7 +51,7 @@ pub struct PDLPatternModule<'c> {
 
 impl<'c> PDLPatternModule<'c> {
     pub fn new(module: Module<'c>) -> Self {
-        let pdl_module = unsafe { Self::from_raw(mlirRustPDLPatternGet(module.to_raw())) };
+        let pdl_module = unsafe { Self::from_raw(mlirPDLPatternGet(module.to_raw())) };
         std::mem::forget(module); // Make sure we don't destroy the module yet
         pdl_module
     }

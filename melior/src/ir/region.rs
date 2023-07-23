@@ -1,9 +1,9 @@
 use super::{Block, BlockRef};
 use crate::{logical_result::LogicalResult, pdl::RewritePatternSet};
 use mlir_sys::{
-    mlirRegionAppendOwnedBlock, mlirRegionCreate, mlirRegionDestroy, mlirRegionEqual,
-    mlirRegionGetFirstBlock, mlirRegionInsertOwnedBlockAfter, mlirRegionInsertOwnedBlockBefore,
-    mlirRustApplyOwnedPatternSetOnRegion, MlirRegion,
+    mlirApplyOwnedPatternsGreedilyOnRegion, mlirRegionAppendOwnedBlock, mlirRegionCreate,
+    mlirRegionDestroy, mlirRegionEqual, mlirRegionGetFirstBlock, mlirRegionInsertOwnedBlockAfter,
+    mlirRegionInsertOwnedBlockBefore, MlirRegion,
 };
 use std::{
     marker::PhantomData,
@@ -29,7 +29,7 @@ impl<'c> Region<'c> {
 
     pub fn apply_pattern_set(&mut self, pattern_set: RewritePatternSet) -> LogicalResult {
         unsafe {
-            LogicalResult::from_raw(mlirRustApplyOwnedPatternSetOnRegion(
+            LogicalResult::from_raw(mlirApplyOwnedPatternsGreedilyOnRegion(
                 self.raw,
                 pattern_set.to_raw(),
             ))

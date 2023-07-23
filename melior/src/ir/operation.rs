@@ -20,12 +20,11 @@ use core::{
     mem::{forget, transmute},
 };
 use mlir_sys::{
-    mlirOperationClone, mlirOperationDestroy, mlirOperationDump, mlirOperationEqual,
-    mlirOperationGetBlock, mlirOperationGetContext, mlirOperationGetName,
-    mlirOperationGetNextInBlock, mlirOperationGetNumRegions, mlirOperationGetNumResults,
-    mlirOperationGetRegion, mlirOperationGetResult, mlirOperationPrint,
-    mlirOperationPrintWithFlags, mlirOperationVerify, mlirRustApplyOwnedPatternSetOnOperation,
-    MlirOperation,
+    mlirApplyOwnedPatternsGreedilyOnOperation, mlirOperationClone, mlirOperationDestroy,
+    mlirOperationDump, mlirOperationEqual, mlirOperationGetBlock, mlirOperationGetContext,
+    mlirOperationGetName, mlirOperationGetNextInBlock, mlirOperationGetNumRegions,
+    mlirOperationGetNumResults, mlirOperationGetRegion, mlirOperationGetResult, mlirOperationPrint,
+    mlirOperationPrintWithFlags, mlirOperationVerify, MlirOperation,
 };
 use std::{
     ffi::c_void,
@@ -48,7 +47,7 @@ impl<'c> Operation<'c> {
 
     pub fn apply_pattern_set(&mut self, pattern_set: RewritePatternSet) -> LogicalResult {
         unsafe {
-            LogicalResult::from_raw(mlirRustApplyOwnedPatternSetOnOperation(
+            LogicalResult::from_raw(mlirApplyOwnedPatternsGreedilyOnOperation(
                 self.raw,
                 pattern_set.to_raw(),
             ))
