@@ -30,8 +30,8 @@ impl<'c> OperationBuilder<'c> {
     }
 
     /// Adds a single result.
-    pub fn add_result(mut self, result: Type<'c>) -> Self {
-        unsafe { mlirOperationStateAddResults(&mut self.raw, 1, &result as *const _ as *const _) }
+    pub fn add_result(mut self, result: &Type<'c>) -> Self {
+        unsafe { mlirOperationStateAddResults(&mut self.raw, 1, result as *const _ as *const _) }
         self
     }
 
@@ -49,8 +49,8 @@ impl<'c> OperationBuilder<'c> {
     }
 
     /// Adds a single operand.
-    pub fn add_operand(mut self, operand: Value<'c, '_>) -> Self {
-        unsafe { mlirOperationStateAddOperands(&mut self.raw, 1, &operand as *const _ as *const _) }
+    pub fn add_operand(mut self, operand: &Value<'c, '_>) -> Self {
+        unsafe { mlirOperationStateAddOperands(&mut self.raw, 1, operand as *const _ as *const _) }
 
         self
     }
@@ -73,6 +73,7 @@ impl<'c> OperationBuilder<'c> {
         unsafe {
             mlirOperationStateAddOwnedRegions(&mut self.raw, 1, &region as *const _ as *const _)
         }
+        std::mem::forget(region);
 
         self
     }
