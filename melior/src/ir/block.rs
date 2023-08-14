@@ -265,6 +265,11 @@ pub struct BlockRef<'c, 'a> {
 }
 
 impl<'c, 'a> BlockRef<'c, 'a> {
+    /// Converts an operation reference into a raw object.
+    pub const fn to_raw(self) -> MlirBlock {
+        self.raw
+    }
+
     /// Creates a block reference from a raw object.
     ///
     /// # Safety

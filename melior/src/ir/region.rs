@@ -110,6 +110,27 @@ pub struct RegionRef<'c, 'a> {
 }
 
 impl<'c, 'a> RegionRef<'c, 'a> {
+    /// Gets an region.
+    ///
+    /// This function is different from `deref` because the correct lifetime is
+    /// kept for the return type.
+    ///
+    /// # Safety
+    ///
+    /// The returned reference is safe to use only in the lifetime scope of the
+    /// region reference.
+    pub unsafe fn to_ref(&self) -> &'a Region<'c> {
+        // As we can't deref RegionRef<'a> into `&'a Region`, we forcibly cast its
+        // lifetime here to extend it from the lifetime of `ObjectRef<'a>` itself into
+        // `'a`.
+        transmute(self)
+    }
+
+    /// Converts an region reference into a raw object.
+    pub const fn to_raw(self) -> MlirRegion {
+        self.raw
+    }
+
     /// Creates a region from a raw object.
     ///
     /// # Safety

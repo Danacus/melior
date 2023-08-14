@@ -3,14 +3,28 @@
 use super::Pass;
 use crate::{
     dialect::DialectHandle,
-    ir::{r#type::TypeId, OperationRef},
+    ir::{operation::OperationMut, r#type::TypeId},
     ContextRef, StringRef,
 };
 use mlir_sys::{
     mlirCreateExternalPass, MlirContext, MlirExternalPass, MlirExternalPassCallbacks,
     MlirLogicalResult, MlirOperation,
 };
-use std::{mem::transmute, ptr::drop_in_place};
+use std::{marker::PhantomData, mem::transmute, ptr::drop_in_place};
+
+pub struct ExternalPassHandle<'a> {
+    pub raw: MlirExternalPass,
+    _lifetime: PhantomData<&'a MlirExternalPass>,
+}
+
+impl<'a> ExternalPassHandle<'a> {
+    pub const unsafe fn from_raw(raw: MlirExternalPass) -> Self {
+        Self {
+            raw,
+            _lifetime: PhantomData,
+        }
+    }
+}
 
 unsafe extern "C" fn callback_construct<'a, T: ExternalPass<'a>>(pass: *mut T) {
     pass.as_mut()
@@ -37,12 +51,15 @@ unsafe extern "C" fn callback_initialize<'a, T: ExternalPass<'a>>(
 
 unsafe extern "C" fn callback_run<'a, T: ExternalPass<'a>>(
     op: MlirOperation,
-    _mlir_pass: MlirExternalPass,
+    mlir_pass: MlirExternalPass,
     pass: *mut T,
 ) {
     pass.as_mut()
         .expect("pass should be valid when called")
-        .run(OperationRef::from_raw(op))
+        .run(
+            OperationMut::from_raw(op),
+            ExternalPassHandle::from_raw(mlir_pass),
+        )
 }
 
 unsafe extern "C" fn callback_clone<'a, T: ExternalPass<'a>>(pass: *mut T) -> *mut T {
@@ -90,14 +107,14 @@ pub trait ExternalPass<'c>: Sized + Clone {
     fn construct(&mut self) {}
     fn destruct(&mut self) {}
     fn initialize(&mut self, context: ContextRef<'c>);
-    fn run(&mut self, operation: OperationRef<'c, '_>);
+    fn run<'a>(&'a mut self, operation: OperationMut<'c, '_>, pass: ExternalPassHandle<'a>);
 }
 
-impl<'c, F: FnMut(OperationRef<'c, '_>) + Clone> ExternalPass<'c> for F {
+impl<'c, F: FnMut(OperationMut<'c, '_>, ExternalPassHandle<'_>) + Clone> ExternalPass<'c> for F {
     fn initialize(&mut self, _context: ContextRef<'c>) {}
 
-    fn run(&mut self, operation: OperationRef<'c, '_>) {
-        self(operation)
+    fn run<'a>(&'a mut self, operation: OperationMut<'c, '_>, pass: ExternalPassHandle<'a>) {
+        self(operation, pass)
     }
 }
 
@@ -221,7 +238,11 @@ mod tests {
                 self.value = 20;
             }
 
-            fn run(&mut self, operation: OperationRef<'c, '_>) {
+            fn run<'a>(
+                &'a mut self,
+                operation: OperationMut<'c, '_>,
+                pass: ExternalPassHandle<'a>,
+            ) {
                 assert_eq!(self.value, 20);
                 self.value = 30;
                 assert!(operation.verify());
@@ -273,7 +294,7 @@ mod tests {
         let pass_manager = PassManager::new(&context);
 
         pass_manager.add_pass(create_external(
-            |operation: OperationRef| {
+            |operation: OperationMut, pass: ExternalPassHandle<'_>| {
                 assert!(operation.verify());
                 assert!(
                     operation
