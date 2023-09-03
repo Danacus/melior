@@ -73,12 +73,17 @@ impl<'c> Region<'c> {
     }
 
     /// Converts a region into a raw object.
-    pub fn into_raw(self) -> mlir_sys::MlirRegion {
+    pub fn into_raw(self) -> MlirRegion {
         let region = self.raw;
 
         forget(self);
 
         region
+    }
+
+    /// Converts a region into a raw object.
+    pub const fn to_raw(&self) -> MlirRegion {
+        self.raw
     }
 }
 
@@ -120,6 +125,11 @@ impl<'c, 'a> RegionRef<'c, 'a> {
             raw,
             _region: Default::default(),
         }
+    }
+
+    /// Converts a region reference into a raw object.
+    pub const fn to_raw(self) -> MlirRegion {
+        self.raw
     }
 
     /// Creates an optional region from a raw object.

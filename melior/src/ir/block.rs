@@ -277,6 +277,11 @@ impl<'c, 'a> BlockRef<'c, 'a> {
         }
     }
 
+    /// Converts a block reference into a raw object.
+    pub const fn to_raw(self) -> MlirBlock {
+        self.raw
+    }
+
     /// Creates an optional block reference from a raw object.
     ///
     /// # Safety
